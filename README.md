@@ -2,7 +2,8 @@
 
 A modern, privacy-first web app to view and remove hidden GPS & camera metadata (EXIF) from your images. Built with Next.js, Tailwind CSS, and shadcn/ui.
 
-![EXIF Scrubber Screenshot](./screenshot.png)
+## 🔗 Live Demo
+[Try EXIF Scrubber](https://exif-scrubber.vercel.app) - View and remove EXIF metadata from your images in seconds
 
 ---
 
