@@ -2,7 +2,8 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useDropzone } from "react-dropzone";
-import { Loader2, Image as ImageIcon, MapPin, Download, RotateCcw, ExternalLink, Info } from "lucide-react";
+import { Image as ImageIcon, MapPin, Download, RotateCcw, ExternalLink, Info } from "lucide-react";
+import Image from 'next/image';
 import exifr from "exifr";
 import "leaflet/dist/leaflet.css";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 type Metadata = { [key: string]: string | number | boolean };
+type Leaflet = typeof import('leaflet');
 
 export default function ExifScrubberPage() {
   const [file, setFile] = useState<File | null>(null);
@@ -19,10 +21,9 @@ export default function ExifScrubberPage() {
   const [metadata, setMetadata] = useState<Metadata | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [L, setL] = useState<any>(null);
-  const [mapReady, setMapReady] = useState(false);
+  const [L, setL] = useState<Leaflet | null>(null);
 
-  const mapRef = useRef<any>(null);
+  const mapRef = useRef<ReturnType<Leaflet['map']> | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
 
@@ -53,7 +54,7 @@ export default function ExifScrubberPage() {
       !mapRef.current
     ) {
       // Set up Leaflet icon paths
-      delete (L.Icon.Default.prototype as any)._getIconUrl;
+      delete (L.Icon.Default.prototype as { _getIconUrl?: string })._getIconUrl;
       L.Icon.Default.mergeOptions({
         iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
         iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
@@ -67,7 +68,6 @@ export default function ExifScrubberPage() {
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
       L.marker([Number(metadata.latitude), Number(metadata.longitude)]).addTo(map);
       mapRef.current = map;
-      setMapReady(true);
     }
   }, [L, metadata]);
 
@@ -76,7 +76,6 @@ export default function ExifScrubberPage() {
     setFile(acceptedFile);
     setError(null);
     setMetadata(null);
-    setMapReady(false);
     if (mapRef.current) {
       mapRef.current.remove();
       mapRef.current = null;
@@ -103,9 +102,13 @@ export default function ExifScrubberPage() {
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    canvas.width = imageRef.current.naturalWidth;
-    canvas.height = imageRef.current.naturalHeight;
-    ctx.drawImage(imageRef.current, 0, 0);
+    
+    const img = imageRef.current.querySelector('img');
+    if (!img) return;
+    
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    ctx.drawImage(img, 0, 0);
     const link = document.createElement("a");
     link.download = `scrubbed_${file.name}`;
     link.href = canvas.toDataURL("image/jpeg", 0.9);
@@ -118,7 +121,6 @@ export default function ExifScrubberPage() {
     setMetadata(null);
     setIsLoading(false);
     setError(null);
-    setMapReady(false);
     if (imageUrl) URL.revokeObjectURL(imageUrl);
     if (mapRef.current) {
       mapRef.current.remove();
@@ -167,12 +169,16 @@ export default function ExifScrubberPage() {
                   </CardHeader>
                   <CardContent className="w-full flex flex-col items-center">
                     <div className="w-full flex justify-center mb-4">
-                      <img
-                        ref={imageRef}
-                        src={imageUrl!}
-                        alt="Image preview"
-                        className="rounded-lg max-h-72 object-contain border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 shadow-md"
-                      />
+                      <div ref={imageRef} className="relative">
+                        <Image
+                          src={imageUrl!}
+                          alt="Image preview"
+                          width={800}
+                          height={600}
+                          className="rounded-lg max-h-72 object-contain border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 shadow-md"
+                          style={{ maxHeight: '18rem' }}
+                        />
+                      </div>
                     </div>
                     <Tooltip>
                       <TooltipTrigger asChild>
