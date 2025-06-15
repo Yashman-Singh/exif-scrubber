@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 48" fill="none">
+  <text x="0" y="36" font-family="'Segoe UI', Arial, sans-serif" font-size="32" font-weight="bold" fill="#2563eb">EXIF</text>
+  <rect x="90" y="8" width="40" height="32" rx="8" fill="#2563eb"/>
+  <circle cx="110" cy="24" r="8" fill="#fff"/>
+  <text x="140" y="36" font-family="'Segoe UI', Arial, sans-serif" font-size="32" font-weight="bold" fill="#22223b">Scrubber</text>
+</svg> 
