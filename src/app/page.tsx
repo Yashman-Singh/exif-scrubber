@@ -19,7 +19,6 @@ export default function ExifScrubberPage() {
   const [metadata, setMetadata] = useState<Metadata | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [L, setL] = useState<Leaflet | null>(null);
   const [showMap, setShowMap] = useState(false);
   const [mapLoading, setMapLoading] = useState(false);
 
@@ -76,7 +75,6 @@ export default function ExifScrubberPage() {
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
       L.marker([Number(metadata.latitude), Number(metadata.longitude)]).addTo(map);
       mapRef.current = map;
-      setL(L);
       setShowMap(true);
     } catch (err) {
       console.error("Failed to load map:", err);
@@ -91,7 +89,6 @@ export default function ExifScrubberPage() {
     setError(null);
     setMetadata(null);
     setShowMap(false);
-    setL(null);
     if (mapRef.current) {
       mapRef.current.remove();
       mapRef.current = null;
@@ -148,7 +145,6 @@ export default function ExifScrubberPage() {
     setIsLoading(false);
     setError(null);
     setShowMap(false);
-    setL(null);
     if (mapRef.current) {
       mapRef.current.remove();
       mapRef.current = null;
@@ -198,6 +194,7 @@ export default function ExifScrubberPage() {
                   <CardContent className="w-full flex flex-col items-center">
                     <div className="w-full flex justify-center mb-4">
                       <div ref={imageRef} className="relative">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={imageUrl!}
                           alt="Image preview"
