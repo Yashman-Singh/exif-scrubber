@@ -3,9 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useDropzone } from "react-dropzone";
 import { Image as ImageIcon, MapPin, Download, RotateCcw, ExternalLink, Info } from "lucide-react";
-import Image from 'next/image';
 import exifr from "exifr";
-import "leaflet/dist/leaflet.css";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -22,18 +20,13 @@ export default function ExifScrubberPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [L, setL] = useState<Leaflet | null>(null);
+  const [showMap, setShowMap] = useState(false);
+  const [mapLoading, setMapLoading] = useState(false);
 
   const mapRef = useRef<ReturnType<Leaflet['map']> | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
 
-  useEffect(() => {
-    import("leaflet").then((leaflet) => {
-      setL(leaflet.default);
-    });
-  }, []);
-
-  // Clean up map on unmount
   useEffect(() => {
     return () => {
       if (mapRef.current) {
@@ -43,42 +36,68 @@ export default function ExifScrubberPage() {
     };
   }, []);
 
-  // Initialize map when metadata with GPS is available
   useEffect(() => {
-    if (
-      L &&
-      metadata &&
-      metadata.latitude &&
-      metadata.longitude &&
-      mapContainerRef.current &&
-      !mapRef.current
-    ) {
-      // Set up Leaflet icon paths
+    return () => {
+      if (imageUrl) {
+        URL.revokeObjectURL(imageUrl);
+      }
+    };
+  }, [imageUrl]);
+
+  const initializeMap = useCallback(async () => {
+    if (!metadata?.latitude || !metadata?.longitude || !mapContainerRef.current || mapRef.current) {
+      return;
+    }
+
+    setMapLoading(true);
+    try {
+      if (!document.querySelector('link[href*="leaflet"]')) {
+        const link = document.createElement("link");
+        link.rel = "stylesheet";
+        link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+        document.head.appendChild(link);
+      }
+
+      const leaflet = await import("leaflet");
+      const L = leaflet.default;
+
       delete (L.Icon.Default.prototype as { _getIconUrl?: string })._getIconUrl;
       L.Icon.Default.mergeOptions({
         iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
         iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
         shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
       });
-      // Initialize map
+
       const map = L.map(mapContainerRef.current).setView([
         Number(metadata.latitude),
         Number(metadata.longitude),
       ], 13);
+
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
       L.marker([Number(metadata.latitude), Number(metadata.longitude)]).addTo(map);
       mapRef.current = map;
+      setL(L);
+      setShowMap(true);
+    } catch (err) {
+      console.error("Failed to load map:", err);
+    } finally {
+      setMapLoading(false);
     }
-  }, [L, metadata]);
+  }, [metadata]);
 
   const handleFile = useCallback(async (acceptedFile: File) => {
     setIsLoading(true);
     setFile(acceptedFile);
     setError(null);
     setMetadata(null);
+    setShowMap(false);
+    setL(null);
     if (mapRef.current) {
       mapRef.current.remove();
       mapRef.current = null;
+    }
+    if (imageUrl) {
+      URL.revokeObjectURL(imageUrl);
     }
     const url = URL.createObjectURL(acceptedFile);
     setImageUrl(url);
@@ -95,7 +114,7 @@ export default function ExifScrubberPage() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [imageUrl]);
 
   const handleScrubAndDownload = () => {
     if (!imageRef.current || !file) return;
@@ -109,19 +128,27 @@ export default function ExifScrubberPage() {
     canvas.width = img.naturalWidth;
     canvas.height = img.naturalHeight;
     ctx.drawImage(img, 0, 0);
+    
+    const mime = file.type === "image/png" ? "image/png" : "image/jpeg";
+    const quality = mime === "image/jpeg" ? 0.9 : undefined;
+    
     const link = document.createElement("a");
     link.download = `scrubbed_${file.name}`;
-    link.href = canvas.toDataURL("image/jpeg", 0.9);
+    link.href = canvas.toDataURL(mime, quality);
     link.click();
   };
 
   const resetState = () => {
+    if (imageUrl) {
+      URL.revokeObjectURL(imageUrl);
+    }
     setFile(null);
     setImageUrl(null);
     setMetadata(null);
     setIsLoading(false);
     setError(null);
-    if (imageUrl) URL.revokeObjectURL(imageUrl);
+    setShowMap(false);
+    setL(null);
     if (mapRef.current) {
       mapRef.current.remove();
       mapRef.current = null;
@@ -146,8 +173,9 @@ export default function ExifScrubberPage() {
         <main className="flex-1 flex flex-col items-center justify-center px-4 py-8">
           <div className="w-full max-w-4xl mx-auto">
             {!file ? (
-              <Card className={`transition-all duration-200 border-2 border-dashed rounded-2xl p-10 bg-white/80 dark:bg-slate-900/80 shadow-xl flex flex-col items-center justify-center cursor-pointer hover:border-blue-500 focus:border-blue-500 outline-none ${isDragActive ? "border-blue-500 bg-blue-100 dark:bg-blue-900/40" : "border-slate-300 dark:border-slate-700"}`}
+              <Card 
                 {...getRootProps()}
+                className={`transition-all duration-200 border-2 border-dashed rounded-2xl p-10 bg-white/80 dark:bg-slate-900/80 shadow-xl flex flex-col items-center justify-center cursor-pointer hover:border-blue-500 focus:border-blue-500 outline-none ${isDragActive ? "border-blue-500 bg-blue-100 dark:bg-blue-900/40" : "border-slate-300 dark:border-slate-700"}`}
                 tabIndex={0}
                 aria-label="Upload image"
               >
@@ -157,7 +185,7 @@ export default function ExifScrubberPage() {
                   {isDragActive ? "Drop the image here ..." : "Drag & drop an image, or click to select"}
                 </CardTitle>
                 <CardContent className="text-sm text-slate-500 dark:text-slate-400 text-center">
-                  JPG or PNG only. All processing is 100% in your browser.
+                  JPG or PNG only. All processing happens in your browser. No files are uploaded.
                 </CardContent>
               </Card>
             ) : (
@@ -170,13 +198,11 @@ export default function ExifScrubberPage() {
                   <CardContent className="w-full flex flex-col items-center">
                     <div className="w-full flex justify-center mb-4">
                       <div ref={imageRef} className="relative">
-                        <Image
+                        <img
                           src={imageUrl!}
                           alt="Image preview"
-                          width={800}
-                          height={600}
                           className="rounded-lg max-h-72 object-contain border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 shadow-md"
-                          style={{ maxHeight: '18rem' }}
+                          style={{ maxHeight: '18rem', maxWidth: '100%' }}
                         />
                       </div>
                     </div>
@@ -185,9 +211,10 @@ export default function ExifScrubberPage() {
                         <Button
                           onClick={handleScrubAndDownload}
                           className="mt-2 w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg flex items-center justify-center transition-colors shadow-md"
+                          aria-label="Download scrubbed image"
                         >
                           <Download className="w-5 h-5 mr-2" />
-                          Download Scrubbed Image
+                          Download scrubbed image
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>Download the image with all metadata removed</TooltipContent>
@@ -240,11 +267,23 @@ export default function ExifScrubberPage() {
                                 Google Maps
                               </a>
                             </h3>
-                            <div
-                              ref={mapContainerRef}
-                              id="map"
-                              className="h-48 w-full rounded-lg border border-slate-200 dark:border-slate-700 mb-4 shadow"
-                            />
+                            {!showMap ? (
+                              <Button
+                                onClick={initializeMap}
+                                disabled={mapLoading}
+                                variant="outline"
+                                className="w-full mb-4"
+                                aria-label="Show location on map"
+                              >
+                                {mapLoading ? "Loading map..." : "Show location on map"}
+                              </Button>
+                            ) : (
+                              <div
+                                ref={mapContainerRef}
+                                id="map"
+                                className="h-48 w-full rounded-lg border border-slate-200 dark:border-slate-700 mb-4 shadow"
+                              />
+                            )}
                           </div>
                         )}
                         <div className="overflow-y-auto max-h-64 pr-2">
